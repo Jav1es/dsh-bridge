@@ -1,0 +1,132 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    name: 语法 + MCP 冒烟测试
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: 检查文件布局（技能包约定）
+        run: |
+          $required = @('SKILL.md', 'meta.json', 'scripts/dsh_ask.ps1',
+                        'mcp-server/server.mjs', 'mcp-server/dsh-runner.ps1', 'LICENSE')
+          $missing = $required | Where-Object { -not (Test-Path $_) }
+          if ($missing) {
+            Write-Host "::error::缺少必需文件: $($missing -join ', ')"
+            exit 1
+          }
+          Write-Host "✅ 布局检查通过：SKILL.md 位于仓库第一层，LICENSE 存在"
+
+      - name: Node 语法检查
+        run: |
+          node --check mcp-server/server.mjs
+          Write-Host "✅ server.mjs 语法通过"
+
+      - name: PowerShell 语法解析
+        run: |
+          $bad = 0
+          foreach ($f in @('scripts/dsh_ask.ps1', 'mcp-server/dsh-runner.ps1')) {
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path $f).Path, [ref]$null, [ref]$errors) | Out-Null
+            if ($errors.Count -gt 0) {
+              Write-Host "::error file=$f::$($errors.Count) 处语法错误"
+              $errors | ForEach-Object { Write-Host "  $($_.Message)" }
+              $bad++
+            } else {
+              Write-Host "✅ $f 语法通过"
+            }
+          }
+          if ($bad -gt 0) { exit 1 }
+
+      - name: MCP 协议冒烟测试
+        run: |
+          # 注意：runner 上没有 dsh，所以不校验任务是否成功执行，
+          # 只校验协议层是否规范返回 —— 这恰好覆盖「后端不可用时仍然合规」的路径。
+          $req = @(
+            '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"ci","version":"1"}}}'
+            '{"jsonrpc":"2.0","method":"notifications/initialized"}'
+            '{"jsonrpc":"2.0","id":2,"method":"tools/list"}'
+            '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"dsh_status","arguments":{}}}'
+          ) -join "`n"
+
+          $raw = $req | node mcp-server/server.mjs 2>$null
+          $lines = $raw | Where-Object { $_.Trim() }
+          if ($lines.Count -ne 3) {
+            Write-Host "::error::期望 3 条响应（通知不应有响应），实际 $($lines.Count) 条"
+            $raw | ForEach-Object { Write-Host $_ }
+            exit 1
+          }
+
+          $responses = @{}
+          foreach ($l in $lines) {
+            try { $j = $l | ConvertFrom-Json } catch {
+              Write-Host "::error::响应不是合法 JSON: $l"; exit 1
+            }
+            if ($j.jsonrpc -ne '2.0') { Write-Host "::error::jsonrpc 字段不是 2.0"; exit 1 }
+            $responses[[int]$j.id] = $j
+          }
+
+          # 1) initialize
+          $init = $responses[1].result
+          if ($init.serverInfo.name -ne 'dsh-bridge') {
+            Write-Host "::error::serverInfo.name 不正确: $($init.serverInfo.name)"; exit 1
+          }
+          if (-not $init.capabilities.tools) {
+            Write-Host "::error::capabilities.tools 缺失"; exit 1
+          }
+          Write-Host "✅ initialize：$($init.serverInfo.name) v$($init.serverInfo.version)，协议 $($init.protocolVersion)"
+
+          # 2) tools/list —— 必须恰好 2 个工具
+          $tools = @($responses[2].result.tools)
+          if ($tools.Count -ne 2) {
+            Write-Host "::error::期望 2 个工具，实际 $($tools.Count) 个"; exit 1
+          }
+          $names = ($tools | ForEach-Object { $_.name } | Sort-Object) -join ','
+          if ($names -ne 'dsh_run,dsh_status') {
+            Write-Host "::error::工具名不符: $names"; exit 1
+          }
+          foreach ($t in $tools) {
+            if (-not $t.inputSchema -or $t.inputSchema.type -ne 'object') {
+              Write-Host "::error::$($t.name) 的 inputSchema 缺失或不是 object"; exit 1
+            }
+          }
+          Write-Host "✅ tools/list：$names"
+
+          # 3) tools/call —— 校验结构，不校验 dsh 是否真的存在
+          $call = $responses[3].result
+          if (-not $call.content -or $call.content.Count -lt 1) {
+            Write-Host "::error::tools/call 返回缺少 content"; exit 1
+          }
+          if ($call.content[0].type -ne 'text') {
+            Write-Host "::error::content[0].type 不是 text"; exit 1
+          }
+          Write-Host "✅ tools/call：返回结构合规（isError=$($call.isError)）"
+
+      - name: 敏感信息扫描
+        run: |
+          # 公开仓库不应出现本机路径 / 用户名
+          $hits = Get-ChildItem -Recurse -File |
+            Where-Object { $_.FullName -notmatch '\\\.git\\' } |
+            Select-String -Pattern 'C:\\Users\\(?!YOUR_USERNAME)[A-Za-z0-9_.-]+\\' -ErrorAction SilentlyContinue
+          if ($hits) {
+            Write-Host "::error::发现疑似本机绝对路径"
+            $hits | ForEach-Object { Write-Host "  $($_.Path):$($_.LineNumber)" }
+            exit 1
+          }
+          Write-Host "✅ 未发现本机绝对路径"
