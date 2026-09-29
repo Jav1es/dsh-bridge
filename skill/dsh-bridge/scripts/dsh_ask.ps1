@@ -1,4 +1,4 @@
-# dsh_ask.ps1 — 把 DeepSeek Harness 当作一次性子代理调用
+﻿# dsh_ask.ps1 — 把 DeepSeek Harness 当作一次性子代理调用
 #
 # 用法：
 #   .\dsh_ask.ps1 "帮我把这个目录里的 xlsx 汇总成一张表"
@@ -86,12 +86,15 @@ end {
         $sq = { param($s) "'" + ($s -replace "'", "''") + "'" }
         $runLines = @()
         $runLines += '$ErrorActionPreference = ''Stop'''
-        $runLines += ('$t = [System.IO.File]::ReadAllText(' + (& $sq $taskFile) + ', [System.Text.Encoding]::UTF8)')
-        $dshArgs = @((& $sq $dsh), "'--profile'", "'headless'")
+        $qTaskFile = & $sq $taskFile
+        $runLines += ('$t = [System.IO.File]::ReadAllText(' + $qTaskFile + ', [System.Text.Encoding]::UTF8)')
+        $qDsh = & $sq $dsh
+        $dshArgs = @($qDsh, "'--profile'", "'headless'")
         if ($Json) { $dshArgs += "'--json'" }
         if (-not [string]::IsNullOrWhiteSpace($SessionId)) {
+            $qSessionId = & $sq $SessionId
             $dshArgs += "'--session-id'"
-            $dshArgs += (& $sq $SessionId)
+            $dshArgs += $qSessionId
         }
         $runLines += ('& ' + ($dshArgs -join ' ') + ' $t')
         $runLines += 'exit $LASTEXITCODE'
