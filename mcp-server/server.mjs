@@ -37,6 +37,10 @@ function log(...a) {
     process.stderr.write('[dsh-bridge] ' + a.join(' ') + '\n');
 }
 
+/** Marvis 的索引里 enabled=1 表示启用。只认它 —— 未启用的条目不该出现在候选里， */
+/** 否则派工单会建议 Marvis 去调一个当前根本调不动的工具。 */
+const isOn = (x) => Number(x.enabled) === 1;
+
 /** 选一个可用的 PowerShell 宿主。
  *  MCP server 常被以精简环境启动，PATH 里未必有 pwsh —— 逐个探测已知位置。 */
 let _pwsh = null;
@@ -257,7 +261,7 @@ function shortlist(question, catalog, topSkills, topTools) {
         .map((x) => x.it);
     return {
         skills: rank(catalog.skills, (x) => `${x.name} ${x.id}`, (x) => x.desc, topSkills, 2),
-        tools: rank(catalog.tools.filter((t) => t.enabled !== 0), (x) => x.id, (x) => x.desc, topTools, 1),
+        tools: rank(catalog.tools.filter(isOn), (x) => x.id, (x) => x.desc, topTools, 1),
     };
 }
 
@@ -268,8 +272,9 @@ function buildPlanPrompt(question, pick, catalog) {
     const toolLines = pick.tools.length
         ? pick.tools.map((t, i) => `${i + 1}. ${t.id}｜${t.desc.slice(0, 220)}`).join('\n')
         : '（无相关 MCP 工具命中）';
-    const serverLines = catalog.servers.length
-        ? catalog.servers.map((s) => `- ${s.id}：${s.desc.slice(0, 120)}`).join('\n')
+    const onServers = catalog.servers.filter(isOn);
+    const serverLines = onServers.length
+        ? onServers.map((s) => `- ${s.id}：${s.desc.slice(0, 120)}`).join('\n')
         : '（无）';
 
     return `你是 Marvis 的任务规划器。Marvis 是本机的一个桌面 AI 助手，它自己带着一套技能库和 MCP 工具。
@@ -474,7 +479,7 @@ async function handle(req) {
                     const text = r.stdout.trim();
                     const head = [
                         `<!-- dsh_plan：候选 ${pick.skills.length} 技能 / ${pick.tools.length} 工具` +
-                        `（库内共 ${catalog.skills.length} / ${catalog.tools.length}）；` +
+                        `（库内共 ${catalog.skills.length} / ${catalog.tools.length}，已启用 ${catalog.servers.filter(isOn).length} 个 MCP 服务器、${catalog.tools.filter(isOn).length} 个工具）；` +
                         `用时与退出码见文末 -->`,
                         '',
                     ].join('\n');
