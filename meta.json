@@ -1,8 +1,9 @@
 {
   "name": "dsh-bridge",
-  "display_name": "dsh-bridge",
+  "display_name": "DSH 子代理（复核与重活）",
   "version": "1.0.0",
   "author": "Jav1es",
+  "icon": "icon.png",
   "description": "把本机 DeepSeek Harness（dsh）当作「复核与重活」子代理：AI 审计/复核（挑错、核对数字与来源、交叉验证、一致性检查）与复杂文档（长报告、方案、标书、公文、docx/xlsx/pptx 产出、批量文档处理）。",
   "detail_describe": "调用本机已登录的 dsh 做 AI 审计与复杂文档\n审计模式：挑错、核对数字、交叉验证、给证据定位\n文档模式：长文档、结构化产出、多格式落盘、批量处理\n免 API Key、离线可用、零额外配置",
   "display_description": "调本机 dsh 做 AI 审计与复杂文档",
