@@ -9,6 +9,7 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/Jav1es/dsh-bridge/actions/workflows/ci.yml"><img src="https://github.com/Jav1es/dsh-bridge/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/License-MIT-green" alt="License"></a>
   <img src="https://img.shields.io/badge/Platform-Windows-0078d4" alt="Platform">
   <img src="https://img.shields.io/badge/Node-%E2%89%A518-339933" alt="Node">
@@ -38,6 +39,7 @@ I use Marvis for almost everything, but there are two kinds of work I don't want
 - [🛠 Design Notes](#-design-notes)
 - [⚠️ Known Limitations](#️-known-limitations)
 - [📁 Repository Layout](#-repository-layout)
+- [📚 Documentation](#-documentation)
 - [📢 Honesty Statement](#-honesty-statement)
 - [📄 License](#-license)
 
@@ -87,8 +89,20 @@ dsh --profile headless "只回复两个字：可以"
 
 ### Route A: Install the Skill
 
+**Recommended: import by link inside Marvis**
+
+Open **技能广场 → 工具箱/连接 → 链接添加** and paste the repository root:
+
+```
+https://github.com/Jav1es/dsh-bridge
+```
+
+> ⚠️ It must be the **repository root**. Marvis treats the whole repository as one skill package and requires `SKILL.md` at the **first level** — this repo is laid out that way (see [troubleshooting](docs/troubleshooting.md)).
+
+**Alternative: install manually**
+
 ```powershell
-Copy-Item -Recurse -Force .\skill\dsh-bridge "$env:USERPROFILE\.marvis\skills\custom\dsh-bridge"
+git clone https://github.com/Jav1es/dsh-bridge "$env:USERPROFILE\.marvis\skills\custom\dsh-bridge"
 ```
 
 Then say something in Marvis that should trigger it, e.g. "audit the numbers in this report". Marvis reads `SKILL.md` and decides whether to call out.
@@ -199,24 +213,39 @@ Always pass `workdir` when files are involved, **ask for artifacts on disk** rat
 ## 📁 Repository Layout
 
 ```
-dsh-bridge/
-├── assets/
-│   ├── icon.png                    # Project icon (whale + bridge)
-│   └── icon.svg                    # Vector source
-├── skill/
-│   └── dsh-bridge/
-│       ├── SKILL.md                # Skill definition: triggers + audit/document prompt templates
-│       ├── meta.json               # Marvis skill metadata
-│       └── scripts/
-│           └── dsh_ask.ps1         # Wrapper with timeout / stdin / session resume / JSON
+dsh-bridge/                     # repo root = skill package root (Marvis requires SKILL.md at the first level)
+├── SKILL.md                    # Skill definition: triggers + audit/document prompt templates
+├── meta.json                   # Marvis skill metadata
+├── scripts/
+│   └── dsh_ask.ps1             # Wrapper with timeout / stdin / session resume / JSON
 ├── mcp-server/
-│   ├── server.mjs                  # Zero-dependency MCP stdio server
-│   ├── dsh-runner.ps1              # One-shot dsh runner
-│   └── example-config.json         # Config template to paste into Marvis
-├── README.md                       # 简体中文
-├── README.en.md                    # This file
-└── LICENSE
+│   ├── server.mjs              # Zero-dependency MCP stdio server
+│   ├── dsh-runner.ps1          # One-shot dsh runner
+│   └── example-config.json     # Config template to paste into Marvis
+├── docs/
+│   ├── design.md               # Design trade-offs (temp file, process tree, PATH fallbacks…)
+│   ├── mcp-reference.md        # Tool arguments, manual debugging, event stream format
+│   └── troubleshooting.md      # Backend / bridge / Marvis import / security
+├── assets/
+│   ├── icon.png                # Project icon (whale + bridge)
+│   └── icon.svg                # Vector source
+├── .github/workflows/ci.yml    # CI: layout + syntax + MCP smoke test + secret scan
+├── README.md                   # 简体中文
+├── README.en.md                # This file
+└── LICENSE                     # MIT (required for skill import)
 ```
+
+---
+
+## 📚 Documentation
+
+| Document | Contents |
+|---|---|
+| [Design trade-offs](docs/design.md) | Why a temp file instead of the command line / why stdout carries protocol only / why we kill the process tree / why absolute-path fallbacks |
+| [MCP reference](docs/mcp-reference.md) | Full tool arguments, manual JSON-RPC debugging, event stream format, multi-turn resume |
+| [Troubleshooting](docs/troubleshooting.md) | Backend / bridge / Marvis import / security — symptom → cause → fix |
+
+CI runs on every push: layout check → Node and PowerShell syntax checks → **MCP protocol smoke test** → secret scan.
 
 ---
 

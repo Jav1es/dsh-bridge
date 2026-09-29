@@ -9,6 +9,7 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/Jav1es/dsh-bridge/actions/workflows/ci.yml"><img src="https://github.com/Jav1es/dsh-bridge/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/License-MIT-green" alt="License"></a>
   <img src="https://img.shields.io/badge/Platform-Windows-0078d4" alt="Platform">
   <img src="https://img.shields.io/badge/Node-%E2%89%A518-339933" alt="Node">
@@ -38,6 +39,7 @@ Marvis 免费、快，适合干日常；DeepSeek Harness（下称 dsh）带完�
 - [🛠 设计要点](#-设计要点)
 - [⚠️ 已知限制](#️-已知限制)
 - [📁 仓库结构](#-仓库结构)
+- [📚 文档](#-文档)
 - [📢 诚信说明](#-诚信说明)
 - [📄 License](#-license)
 
@@ -87,8 +89,20 @@ dsh --profile headless "只回复两个字：可以"
 
 ### 方式 A：安装 Skill
 
+**推荐：在 Marvis 里用「链接添加」直接导入**
+
+打开 **技能广场 → 工具箱/连接 → 链接添加**，填入仓库根地址：
+
+```
+https://github.com/Jav1es/dsh-bridge
+```
+
+> ⚠️ 这条链接必须是**仓库根**。Marvis 会把整个仓库当作一个技能包处理，要求 `SKILL.md` 位于**第一层目录**——本仓库已按此组织（见[排错文档](docs/troubleshooting.md#c-marvis-导入层)）。
+
+**备选：手动安装**
+
 ```powershell
-Copy-Item -Recurse -Force .\skill\dsh-bridge "$env:USERPROFILE\.marvis\skills\custom\dsh-bridge"
+git clone https://github.com/Jav1es/dsh-bridge "$env:USERPROFILE\.marvis\skills\custom\dsh-bridge"
 ```
 
 然后在 Marvis 里说一句会触发它的话，例如「审计一下这份报告的数字」。Marvis 会读 `SKILL.md` 自行决定是否调用。
@@ -97,7 +111,7 @@ Copy-Item -Recurse -Force .\skill\dsh-bridge "$env:USERPROFILE\.marvis\skills\cu
 
 ```powershell
 $s = "$env:USERPROFILE\.marvis\skills\custom\dsh-bridge\scripts\dsh_ask.ps1"
-$s | & $s "只回复两个字：可以"     # 长任务推荐用管道传，免转义
+"只回复两个字：可以" | & $s     # 长任务推荐用管道传，免转义
 ```
 
 ### 方式 B：接入 MCP Server
@@ -199,24 +213,39 @@ Copy-Item .\mcp-server\* "$env:USERPROFILE\.marvis\mcp\dsh-bridge\" -Force
 ## 📁 仓库结构
 
 ```
-dsh-bridge/
-├── assets/
-│   ├── icon.png                    # 项目图标（鲸鱼 + 桥）
-│   └── icon.svg                    # 图标矢量源文件
-├── skill/
-│   └── dsh-bridge/
-│       ├── SKILL.md                # 技能定义：触发条件 + 审计/文档两套 prompt 模板
-│       ├── meta.json               # Marvis 技能元数据
-│       └── scripts/
-│           └── dsh_ask.ps1         # 带超时 / stdin / 会话续跑 / JSON 的封装
+dsh-bridge/                     ← 仓库根 = 技能包根（Marvis 导入要求 SKILL.md 在第一层）
+├── SKILL.md                    # 技能定义：触发条件 + 审计/文档两套 prompt 模板
+├── meta.json                   # Marvis 技能元数据
+├── scripts/
+│   └── dsh_ask.ps1             # 带超时 / stdin / 会话续跑 / JSON 的封装
 ├── mcp-server/
-│   ├── server.mjs                  # 零依赖 MCP stdio 服务器
-│   ├── dsh-runner.ps1              # 一次性 dsh 执行器
-│   └── example-config.json         # 粘贴到 Marvis 的配置模板
-├── README.md                       # 本文件
-├── README.en.md                    # English
-└── LICENSE
+│   ├── server.mjs              # 零依赖 MCP stdio 服务器
+│   ├── dsh-runner.ps1          # 一次性 dsh 执行器
+│   └── example-config.json     # 粘贴到 Marvis 的配置模板
+├── docs/
+│   ├── design.md               # 设计取舍（为什么走临时文件 / 杀进程树 / 路径回退…）
+│   ├── mcp-reference.md        # 工具参数速查 + 手工调试 + 事件流格式
+│   └── troubleshooting.md      # 排错：后端 / 桥接 / Marvis 导入 / 安全
+├── assets/
+│   ├── icon.png                # 项目图标（鲸鱼 + 桥）
+│   └── icon.svg                # 矢量源
+├── .github/workflows/ci.yml    # CI：布局检查 + 语法检查 + MCP 协议冒烟 + 敏感信息扫描
+├── README.md                   # 本文件
+├── README.en.md                # English
+└── LICENSE                     # MIT（技能导入要求必须有）
 ```
+
+---
+
+## 📚 文档
+
+| 文档 | 内容 |
+|---|---|
+| [设计取舍](docs/design.md) | 为什么走临时文件而不是命令行 / 为什么 stdout 只走协议 / 为什么杀进程树 / 为什么路径要有绝对回退 |
+| [MCP 参考](docs/mcp-reference.md) | 两个工具的完整参数、手工调试的 JSON-RPC 示例、事件流格式与多轮续跑 |
+| [排错](docs/troubleshooting.md) | 后端 / 桥接 / Marvis 导入 / 安全，四类问题的现象 → 原因 → 处置 |
+
+CI 每次 push 会跑：文件布局检查 → Node 与 PowerShell 语法检查 → **MCP 协议冒烟测试** → 敏感信息扫描。
 
 ---
 
