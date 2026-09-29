@@ -1,0 +1,12 @@
+# 编辑器 / 系统
+.vscode/
+.idea/
+Thumbs.db
+Desktop.ini
+*.tmp
+*.log
+
+# 本机产物
+dsh_ask_*/
+*.bak
+*.bak-*

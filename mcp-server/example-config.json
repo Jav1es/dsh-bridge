@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "dsh-bridge": {
+      "command": "node",
+      "args": [
+        "C:\\Users\\YOUR_USERNAME\\.marvis\\mcp\\dsh-bridge\\server.mjs"
+      ]
+    }
+  }
+}
