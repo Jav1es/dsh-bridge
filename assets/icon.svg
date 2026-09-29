@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0e2f57"/>
+      <stop offset="55%" stop-color="#164a86"/>
+      <stop offset="100%" stop-color="#1c5fa8"/>
+    </linearGradient>
+    <linearGradient id="whale" x1="0.15" y1="0" x2="0.55" y2="1">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#dbeafb"/>
+    </linearGradient>
+    <clipPath id="squircle">
+      <rect x="0" y="0" width="1024" height="1024" rx="224" ry="224"/>
+    </clipPath>
+  </defs>
+
+  <g clip-path="url(#squircle)">
+    <rect x="0" y="0" width="1024" height="1024" fill="url(#bg)"/>
+
+    <!-- 水面纵深 -->
+    <path d="M -40 600 Q 512 530 1064 600" fill="none" stroke="#ffffff" stroke-opacity="0.09" stroke-width="9"/>
+    <path d="M -40 646 Q 512 580 1064 646" fill="none" stroke="#ffffff" stroke-opacity="0.06" stroke-width="9"/>
+
+    <!-- 鲸鱼：原创剪影，朝右，双叶尾鳍 -->
+    <path d="M 268 512
+             C 230 452 240 370 300 334
+             C 358 300 468 294 568 314
+             C 654 332 728 380 778 448
+             C 802 400 838 362 882 340
+             C 874 392 854 438 828 470
+             C 852 490 870 520 882 556
+             C 840 546 798 524 766 494
+             C 706 538 612 558 514 560
+             C 406 562 310 546 268 512 Z"
+          fill="url(#whale)"/>
+
+    <!-- 眼 -->
+    <circle cx="352" cy="416" r="14" fill="#0e2f57" fill-opacity="0.82"/>
+
+    <!-- 桥：拱 → 桥面 → 桥墩 -->
+    <path d="M 190 744 Q 512 574 834 744" fill="none"
+          stroke="#8cc4f2" stroke-opacity="0.46" stroke-width="24" stroke-linecap="round"/>
+    <path d="M 140 766 L 884 766" stroke="#bcdcf8" stroke-opacity="0.62" stroke-width="28" stroke-linecap="round"/>
+    <rect x="246" y="780" width="28" height="116" rx="14" fill="#8cc4f2" fill-opacity="0.38"/>
+    <rect x="750" y="780" width="28" height="116" rx="14" fill="#8cc4f2" fill-opacity="0.38"/>
+    <rect x="498" y="780" width="28" height="74" rx="14" fill="#8cc4f2" fill-opacity="0.22"/>
+  </g>
+</svg>
