@@ -13,7 +13,7 @@
   <a href="./LICENSE"><img src="https://img.shields.io/badge/License-MIT-green" alt="License"></a>
   <img src="https://img.shields.io/badge/Platform-Windows-0078d4" alt="Platform">
   <img src="https://img.shields.io/badge/Node-%E2%89%A518-339933" alt="Node">
-  <img src="https://img.shields.io/badge/MCP-2_tools-7c3aed" alt="MCP tools">
+  <img src="https://img.shields.io/badge/MCP-3_tools-7c3aed" alt="MCP tools">
   <img src="https://img.shields.io/badge/Tests-6%2F6_passed-059669" alt="Tests">
   <img src="https://img.shields.io/badge/PowerShell-7-5391FE" alt="PowerShell">
 </p>
@@ -174,6 +174,7 @@ All figures below are real runs on my machine, not estimates.
 
 | Tool | Description |
 | :-- | :-- |
+| **`dsh_plan`** | Planning: reads Marvis's **local skill and MCP-tool catalogs**, runs a local keyword retrieval over them, then asks dsh to produce a work order (intent / task breakdown / **exact skill and tool names to call** / whether to hand off to dsh / output spec / caveats). Arguments: `question` (required), `top_k`, `timeout_seconds`, `skip_llm` (return the shortlist only — instant, no model call) |
 | **`dsh_run`** | Hand a task to dsh. Arguments: `task` (required), `workdir`, `timeout_seconds` (default 600, max 3600), `session_id` (continue a session), `json_events` |
 | **`dsh_status`** | Self-check: connectivity, exit code, actual reply, error summary |
 

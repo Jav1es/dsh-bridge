@@ -13,7 +13,7 @@
   <a href="./LICENSE"><img src="https://img.shields.io/badge/License-MIT-green" alt="License"></a>
   <img src="https://img.shields.io/badge/Platform-Windows-0078d4" alt="Platform">
   <img src="https://img.shields.io/badge/Node-%E2%89%A518-339933" alt="Node">
-  <img src="https://img.shields.io/badge/MCP-2_tools-7c3aed" alt="MCP tools">
+  <img src="https://img.shields.io/badge/MCP-3_tools-7c3aed" alt="MCP tools">
   <img src="https://img.shields.io/badge/%E6%B5%8B%E8%AF%95-6%2F6_%E9%80%9A%E8%BF%87-059669" alt="Tests">
   <img src="https://img.shields.io/badge/PowerShell-7-5391FE" alt="PowerShell">
 </p>
@@ -174,6 +174,7 @@ Copy-Item .\mcp-server\* "$env:USERPROFILE\.marvis\mcp\dsh-bridge\" -Force
 
 | 工具 | 说明 |
 | :-- | :-- |
+| **`dsh_plan`** | 规划：读本机 Marvis 的**技能清单与 MCP 工具清单**，对提问做本地检索，再让 dsh 生成一份派工单（意图澄清 / 任务拆解 / **建议调用的技能与工具名** / 是否交给 dsh 深加工 / 输出要求 / 注意事项）。参数：`question`（必填）、`top_k`、`timeout_seconds`、`skip_llm`（true 时只回检索候选，秒回不耗模型） |
 | **`dsh_run`** | 把任务交给 dsh 自主执行。参数：`task`（必填）、`workdir`、`timeout_seconds`（默认 600，上限 3600）、`session_id`（多轮续跑）、`json_events` |
 | **`dsh_status`** | 自检：dsh 是否连通、退出码、实测答复、错误摘要 |
 

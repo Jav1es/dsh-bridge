@@ -92,13 +92,13 @@ jobs:
           }
           Write-Host "✅ initialize：$($init.serverInfo.name) v$($init.serverInfo.version)，协议 $($init.protocolVersion)"
 
-          # 2) tools/list —— 必须恰好 2 个工具
+          # 2) tools/list —— 必须恰好 3 个工具
           $tools = @($responses[2].result.tools)
-          if ($tools.Count -ne 2) {
-            Write-Host "::error::期望 2 个工具，实际 $($tools.Count) 个"; exit 1
+          if ($tools.Count -ne 3) {
+            Write-Host "::error::期望 3 个工具，实际 $($tools.Count) 个"; exit 1
           }
           $names = ($tools | ForEach-Object { $_.name } | Sort-Object) -join ','
-          if ($names -ne 'dsh_run,dsh_status') {
+          if ($names -ne 'dsh_plan,dsh_run,dsh_status') {
             Write-Host "::error::工具名不符: $names"; exit 1
           }
           foreach ($t in $tools) {
