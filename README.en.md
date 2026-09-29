@@ -23,6 +23,8 @@
 </p>
 
 > One Skill + one MCP server that turn your local DeepSeek Harness into Marvis's "reviewer and heavy lifter".
+>
+> 📎 Featured as [module 14](https://jav1es.github.io/portfolio/#works) of the author's portfolio: https://jav1es.github.io/portfolio/
 
 Marvis is free and fast — good for everyday work. DeepSeek Harness (dsh) ships a full toolchain — file I/O, shell, search, docx/xlsx/pptx generation — good for heavy work. This project connects the two: **when Marvis hits an AI-audit/review task or a complex document job, it hands the task to dsh and takes back the result.**
 

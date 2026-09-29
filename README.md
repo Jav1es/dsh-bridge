@@ -23,6 +23,8 @@
 </p>
 
 > 一个 Skill + 一个 MCP Server，把本机 DeepSeek Harness 变成 Marvis 的「复核员 + 重活工」。
+>
+> 📎 本项目已收录为作者作品集的[模块 14](https://jav1es.github.io/portfolio/#works)：https://jav1es.github.io/portfolio/
 
 Marvis 免费、快，适合干日常；DeepSeek Harness（下称 dsh）带完整工具链——读写文件、跑脚本、搜索、生成 docx/xlsx/pptx——适合干重活。本项目把两者接起来：**Marvis 遇到 AI 审计/复核或复杂文档时，把任务交给 dsh 自主执行，拿回结果。**
 
