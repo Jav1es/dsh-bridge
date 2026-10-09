@@ -96,6 +96,26 @@ Marvis 自己也有一套向量索引做工具召回，两者互补——`dsh_pl
 
 ---
 
+## `dsh_kb_search`
+
+**在 Marvis 知识库（marvis-llm-wiki）里做只读关键词检索** —— 路线 1 查询互通的反向通道：DSH 侧直接扫 Marvis 的 `knowledge` 目录（index + wiki 页），零复制、不 ingest、不转换格式、不写任何文件。
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| `query` | string | ✅ | — | 检索关键词（中文/英文均可，按分词打分） |
+| `scope` | string | — | `combined` | `combined`（全部）/ `personal`（个人分区）/ `external`（外部分区） |
+| `top_k` | integer | — | `6` | 返回命中数，上限 `20` |
+
+**返回**：纯文本列表，每条含 `[score] title / 相对路径 / 绝对路径 / 摘要`。
+
+**检索源**：`<MARVIS_HOME>\skills\market\marvis-llm-wiki\knowledge` 下的根 `index.md`、`personal/index.md`、`external/index.md`，以及两分区 `wiki` 目录下全部 `.md` 页。可用 `DSH_BRIDGE_MARVIS_WIKI_ROOT` 覆盖根目录。
+
+**打分**：与 `dsh_plan` 同一套中英混排分词——标题命中权重 ×3，正文命中 ×1。条目缓存 5 分钟。
+
+**什么时候用**：dsh 需要参考 Marvis 侧沉淀的资料（用户偏好、系统配置、模型链路、聊天概览等）时——例如复核涉及 Marvis 知识库内容的产出，先 `dsh_kb_search` 拿原文路径，再 `dsh_run` 读文件核对。
+
+---
+
 ## 手工调试
 
 ### 最简握手 + 列出工具
@@ -108,7 +128,7 @@ Marvis 自己也有一套向量索引做工具召回，两者互补——`dsh_pl
 '@ | node .\mcp-server\server.mjs
 ```
 
-期望：两行响应，第二行 `result.tools` 有 2 个元素。
+期望：两行响应，第二行 `result.tools` 有 4 个元素（`dsh_plan` / `dsh_run` / `dsh_status` / `dsh_kb_search`）。
 
 ### 调用一次
 

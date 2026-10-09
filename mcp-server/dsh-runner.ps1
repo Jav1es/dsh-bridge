@@ -4,6 +4,7 @@
 param(
     [Parameter(Mandatory = $true)][string]$TaskFile,
     [string]$SessionId,
+    [string]$PatchFile,
     [switch]$Json
 )
 
@@ -35,6 +36,10 @@ if (-not $dsh) {
 $a = @('--profile', 'headless')
 if ($Json) { $a += '--json' }
 if (-not [string]::IsNullOrWhiteSpace($SessionId)) { $a += @('--session-id', $SessionId) }
+# 档位路由：注入模型覆盖 patch（dsh CLI 无 --model，此乃唯一指定模型的途径）
+if (-not [string]::IsNullOrWhiteSpace($PatchFile) -and (Test-Path $PatchFile)) {
+    $a += @('--patch', $PatchFile)
+}
 
 & $dsh @a $text
 exit $LASTEXITCODE

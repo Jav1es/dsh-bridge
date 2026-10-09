@@ -134,3 +134,16 @@ $task | & "<SKILL_DIR>\scripts\dsh_ask.ps1" -Task - -WorkDir "D:\work" -TimeoutS
 - 任务文本里**不要写敏感凭据**（它会把任务写进自己的会话日志）。
 - 审计结论是**建议**，最终判断权在你/用户——不要把 dsh 的输出直接当定论转述，尤其它说"没问题"时。
 - 它用本机已登录的 DeepSeek 账号，不消耗 API Key。
+
+---
+
+## 七、知识库互通（路线 1，零复制）
+
+本机两侧知识库**查询互通**，只读、不复制、不转换、不写对方目录：
+
+| 方向 | 通道 | 说明 |
+|---|---|---|
+| **Marvis 搜 DSH** | `scripts\dsh_kb.py`（marvis-llm-wiki 侧） | 直接扫 `~/.dsh/tiddlywiki/main/tiddlers/`，`.md` 与 `.tid` 均可命中，返回标题 + 路径 + 摘要 |
+| **DSH 搜 Marvis** | MCP 工具 `dsh_kb_search` | dsh 需要参考 Marvis 知识库（用户偏好 / 系统配置 / 模型链路 / 聊天概览）时先检索拿路径，再 `dsh_run` 读原文核对 |
+
+**用法**：Marvis 侧跑 `python <SKILL_DIR>\..\marvis-llm-wiki\scripts\dsh_kb.py search "关键词" --limit 8`；dsh 侧在任务里直接说明「先用 dsh_kb_search 检索 Marvis 知识库，再读命中文件的原文」。两者都是关键词打分（标题 ×3 / 正文 ×1），5 分钟级缓存。

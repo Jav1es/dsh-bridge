@@ -28,7 +28,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const RUNNER = join(__dirname, 'dsh-runner.ps1');
 
 const SERVER_NAME = 'dsh-bridge';
-const SERVER_VERSION = '1.0.0';
+const SERVER_VERSION = '1.1.0';
 const DEFAULT_TIMEOUT = 600;   // 秒
 const MAX_TIMEOUT = 3600;      // 秒
 const MAX_OUTPUT = 60000;      // 字符，超出截断
@@ -75,6 +75,8 @@ function runDsh(o) {
         ];
         if (o.sessionId) args.push('-SessionId', o.sessionId);
         if (o.json) args.push('-Json');
+        // 档位路由：注入模型覆盖 patch（唯一能指定模型的途径）
+        if (o.patchFile) args.push('-PatchFile', o.patchFile);
 
         const cwd = o.workdir && existsSync(o.workdir) ? o.workdir : process.cwd();
 
@@ -118,6 +120,95 @@ function runDsh(o) {
     });
 }
 
+// ------------------ 档位匹配（任务 → 成本最低的合适模型） ------------------
+//
+// 依据：[[模型档位表 2026-10-08]]（review-after 2026-11-08，超期须重抓重测）
+// 原则：**满足任务要求的前提下成本最低**。规则自上而下命中即停，命中顺序 = 成本升序。
+//
+// credits 是相对倍率（×）。T0=x0.00 免费，T1≤x0.06，T2≤x0.11。
+// ⚠️ 只有**实测通过**的模型才进路由表。未实测的一律不进（OpenCode Zen / LM Studio 离线）。
+//
+// ⚠️ 关键约束：ds​h CLI 没有 --model 参数，唯一指定模型的途径是 `--patch` 注入
+//    agent-default-model 覆盖。所以这里生成临时 patch 文件传给 runner。
+
+const TIER_RULES = [
+    {
+        tier: 'T0-vision',
+        provider: 'nvidia',
+        model: 'meta/llama-3.2-11b-vision-instruct',
+        credits: 0,
+        note: 'NIM 免费 · 实测 0.63s · 唯一实测可用的看图模型',
+        // 视觉类：看图 / 截图 / OCR / 图像理解
+        test: (t) => /看图|图片|截图|图像|照片|ocr|识图|视觉|读图|这张图|图中|看图说话/i.test(t),
+    },
+    {
+        tier: 'T0-fast',
+        provider: 'workbuddy',
+        model: 'hy4-preview-f',
+        credits: 0,
+        note: 'x0.00 免费 · 960k 上下文 · 通用主力',
+        // 简单/短任务：翻译、改写、摘要、格式转换、一句话问答
+        test: (t) => /翻译|改写|润色|总结一下|摘要|概括|格式转换|转成|一句话|简短|列举|是什么|什么是/i.test(t)
+            && !/审计|复核|交叉验证|对外|发布|数字断言/i.test(t),
+    },
+    {
+        tier: 'T1-longctx',
+        provider: 'workbuddy',
+        model: 'glm-5.3-flash',
+        credits: 0.06,
+        note: 'x0.06 · 1M 上下文 · 长文档首选',
+        // 长上下文：长文档、整本书、大批量、全文
+        test: (t) => /长文|全文|整篇|大批量|批量处理|几十万|上百万|整本书|全书|全量|遍历所有/i.test(t),
+    },
+    {
+        tier: 'T2-deep',
+        provider: 'workbuddy',
+        model: 'deepseek-v4.1-flash',
+        credits: 0.11,
+        note: 'x0.11 · 1M 上下文 · 需一定推理深度',
+        // 中强度推理：分析、对比、多步推理、写作
+        test: (t) => /分析|对比|比较|推理|推导|评估|论证|撰写|写一份|报告|方案|调研/i.test(t)
+            && !/审计|复核|对外|发布|数字断言/i.test(t),
+    },
+    {
+        tier: 'T4-audit',
+        provider: 'workbuddy',
+        model: 'deepseek-v4-pro',
+        credits: 0.51,
+        note: 'x0.51 · 审计升档专用（对外发布 / 数字断言 / 本人结论）',
+        // 升档判据：结论对外发布、含具体数字断言、本人下的结论
+        test: (t) => /审计|复核|交叉验证|挑错|对外|发布|数字断言|最终结论|定稿|交付客户/i.test(t),
+    },
+];
+
+/** 匹配：自上而下（成本升序）命中即停，无命中回落 T0 主力 */
+function routeModel(task) {
+    const t = String(task || '');
+    for (const r of TIER_RULES) {
+        if (r.test(t)) {
+            return { ...r, matched: true };
+        }
+    }
+    // 兜底 = 成本最低且通用的 T0 主力
+    const fb = TIER_RULES.find((r) => r.tier === 'T0-fast');
+    return { ...fb, matched: false, note: fb.note + '（兜底：无规则命中）' };
+}
+
+/** 生成模型覆盖 patch（临时文件），供 dsh --patch 使用 */
+function writeModelPatch(route) {
+    const dir = mkdtempSync(join(tmpdir(), 'dsh-tier-'));
+    const p = join(dir, 'model.yml');
+    writeFileSync(p, [
+        '- id: agent-default-model',
+        '  name: "@deepseek-ai/dsh-agent-default-model"',
+        '  config:',
+        `    provider: ${route.provider}`,
+        `    model: ${route.model}`,
+        '',
+    ].join('\n'), { encoding: 'utf8' });
+    return p;
+}
+
 /** 自检：dsh 是否在 PATH、版本、账号通道是否可用 */
 async function runStatus() {
     const probe = await runDsh({ task: '只回复两个字：可以', timeout: 120 });
@@ -149,6 +240,12 @@ const MARVIS_HOME = process.env.DSH_BRIDGE_MARVIS_HOME
 const SKILL_ROOTS = [join(MARVIS_HOME, 'skills', 'market'), join(MARVIS_HOME, 'skills', 'custom')];
 const MARVIS_DB = join(MARVIS_HOME, 'database', 'data.db');
 const CATALOG_TTL_MS = 5 * 60 * 1000;
+
+// Marvis 知识库（marvis-llm-wiki）根目录 —— dsh_kb_search 的只读检索目标。
+// 零复制：DSH 直接读 Marvis 的 knowledge 目录，不做 ingest / 不做格式转换 / 不写任何文件。
+const WIKI_ROOT = process.env.DSH_BRIDGE_MARVIS_WIKI_ROOT
+    || join(MARVIS_HOME, 'skills', 'market', 'marvis-llm-wiki', 'knowledge');
+const WIKI_TTL_MS = 5 * 60 * 1000;
 
 let _catalog = null;
 let _catalogAt = 0;
@@ -239,6 +336,83 @@ function tokenize(s) {
         }
     }
     return t;
+}
+
+/** 归一化文本：压缩空白，便于做摘要片段 */
+function squash(text) {
+    return String(text || '').replace(/\s+/g, ' ').trim();
+}
+
+/** 从 wiki 页 / 索引文本里提取标题：优先 frontmatter 后的首个 H1/H2，其次文件名 */
+function wikiTitle(fileName, text) {
+    const lines = String(text || '').split(/\r?\n/);
+    // 跳过 frontmatter（--- 包裹）
+    let start = 0;
+    if (lines[0] && lines[0].trim() === '---') {
+        for (let i = 1; i < lines.length; i++) {
+            if (lines[i].trim() === '---') { start = i + 1; break; }
+        }
+    }
+    for (let i = start; i < lines.length; i++) {
+        const m = /^#\s+(.+)$/.exec(lines[i].trim());
+        if (m) return m[1].trim();
+    }
+    return fileName.replace(/\.md$/i, '').trim();
+}
+
+// ------------------ Marvis 知识库（只读检索） ------------------
+//
+// dsh_kb_search 的数据源：marvis-llm-wiki 的 knowledge 目录（index + wiki 页）。
+// 零复制 —— 只读扫描，不 ingest、不转换、不写任何文件。条目缓存 5 分钟。
+
+let _wikiEntries = null;
+let _wikiEntriesAt = 0;
+
+function loadWikiEntries(force = false) {
+    const now = Date.now();
+    if (!force && _wikiEntries && now - _wikiEntriesAt < WIKI_TTL_MS) return _wikiEntries;
+
+    const entries = [];
+    const root = WIKI_ROOT;
+    const seen = new Set();
+    const push = (file) => {
+        try {
+            const text = readFileSync(file, 'utf8');
+            const rel = file.substring(root.length + 1).replace(/\\/g, '/');
+            const partition = rel.startsWith('personal/') ? 'personal'
+                : rel.startsWith('external/') ? 'external' : 'root';
+            const title = wikiTitle(basename(file), text);
+            const tokens = tokenize(title + ' ' + squash(text).slice(0, 3000));
+            if (seen.has(rel)) return;
+            seen.add(rel);
+            entries.push({ rel, partition, title, text, tokens });
+        } catch (e) {
+            log(`wiki entry unreadable: ${file} (${e?.message || e})`);
+        }
+    };
+
+    // 索引文件（根 + 两分区）
+    for (const rel of ['index.md', 'personal/index.md', 'external/index.md']) {
+        const p = join(root, rel);
+        if (existsSync(p)) push(p);
+    }
+    // wiki 页（递归两分区 wiki 目录，排除 raw）
+    const scan = (dir) => {
+        let items = [];
+        try { items = readdirSync(dir, { withFileTypes: true }); } catch { return; }
+        for (const it of items) {
+            const p = join(dir, it.name);
+            if (it.isDirectory()) scan(p);
+            else if (it.isFile() && it.name.toLowerCase().endsWith('.md')) push(p);
+        }
+    };
+    scan(join(root, 'personal', 'wiki'));
+    scan(join(root, 'external', 'wiki'));
+
+    _wikiEntries = { entries, at: now };
+    _wikiEntriesAt = now;
+    log(`wiki loaded: ${entries.length} entries from ${root}`);
+    return _wikiEntries;
 }
 
 function score(qt, text) {
@@ -397,6 +571,31 @@ const TOOLS = [
                     type: 'boolean',
                     description: '可选：true 时返回 NDJSON 事件流而非纯文本（含 session id、token 用量）。',
                 },
+                model: {
+                    type: 'string',
+                    description: [
+                        '档位路由（默认 auto）。auto=按任务特征自动匹配「满足要求下成本最低」的模型；',
+                        'off=不覆盖，用 profile 默认（workbuddy/hy4-preview-f）；',
+                        '也可直接写模型 id（如 glm-5.3-flash）强制指定。',
+                        '依据档位表 2026-10-08（review-after 2026-11-08）。',
+                    ].join(''),
+                },
+            },
+            required: ['task'],
+        },
+    },
+    {
+        name: 'dsh_route',
+        description: [
+            '预览档位匹配结果：给定任务文本，返回「会选中哪个模型、为什么、成本多少」，**不执行**任务。',
+            '',
+            '【用途】调 dsh_run 之前先看清会花多少钱；或想确认某类任务落到哪一档。',
+            '【返回】命中档位、provider/model、credits 倍率、匹配依据（哪条规则命中）。',
+        ].join('\n'),
+        inputSchema: {
+            type: 'object',
+            properties: {
+                task: { type: 'string', description: '待匹配的任务文本（可只写关键词）。' },
             },
             required: ['task'],
         },
@@ -405,6 +604,36 @@ const TOOLS = [
         name: 'dsh_status',
         description: '自检 dsh 桥是否可用：返回 dsh 是否连通、退出码、实测答复与错误摘要。调用 dsh_run 前若不确定环境是否正常，可先跑这个。',
         inputSchema: { type: 'object', properties: {} },
+    },
+    {
+        name: 'dsh_kb_search',
+        description: [
+            '在 Marvis 知识库（marvis-llm-wiki，knowledge 目录）里做关键词检索，返回命中条目（标题 / 相对路径 / 摘要）。',
+            '零复制只读：DSH 直接扫描 Marvis 的 index 与 wiki 页，不 ingest、不转换格式、不写任何文件。',
+            '',
+            '【什么时候用】你需要参考 Marvis 侧沉淀的资料（用户偏好、系统配置、模型链路、聊天概览等）时。',
+            '【参数】query 必填；scope 可选 combined / personal / external，默认 combined；top_k 默认 6。',
+            '【返回】每条命中含 title、rel（相对 knowledge 根的路径）、abs（绝对路径）、score 与 snippet。',
+        ].join('\n'),
+        inputSchema: {
+            type: 'object',
+            properties: {
+                query: {
+                    type: 'string',
+                    description: '检索关键词（中文/英文均可，按分词打分）。',
+                },
+                scope: {
+                    type: 'string',
+                    enum: ['combined', 'personal', 'external'],
+                    description: '检索范围：combined=全部；personal=仅个人分区；external=仅外部分区。默认 combined。',
+                },
+                top_k: {
+                    type: 'integer',
+                    description: '返回命中的条目数，默认 6，上限 20。',
+                },
+            },
+            required: ['query'],
+        },
     },
 ];
 
@@ -447,6 +676,73 @@ async function handle(req) {
                 if (name === 'dsh_status') {
                     const s = await runStatus();
                     ok(id, { content: [{ type: 'text', text: JSON.stringify(s, null, 2) }], isError: false });
+                    return;
+                }
+                if (name === 'dsh_kb_search') {
+                    const query = String(a.query || '').trim();
+                    if (!query) {
+                        ok(id, { content: [{ type: 'text', text: '参数错误：query 不能为空' }], isError: true });
+                        return;
+                    }
+                    const scope = String(a.scope || 'combined');
+                    const topK = Math.min(Math.max(Number(a.top_k) || 6, 1), 20);
+                    const qt = tokenize(query);
+                    const hits = [];
+                    for (const e of loadWikiEntries().entries) {
+                        if (scope === 'personal' && e.partition !== 'personal') continue;
+                        if (scope === 'external' && e.partition !== 'external') continue;
+                        let s = 0;
+                        const tt = tokenize(e.title);
+                        for (const t of qt) {
+                            if (tt.has(t)) s += 3;
+                            else if (e.tokens.has(t)) s += 1;
+                        }
+                        if (s > 0) {
+                            const abs = join(WIKI_ROOT, e.rel);
+                            hits.push({
+                                title: e.title,
+                                rel: e.rel,
+                                abs,
+                                score: s,
+                                snippet: squash(e.text).slice(0, 200),
+                            });
+                        }
+                    }
+                    hits.sort((a, b) => b.score - a.score || a.title.localeCompare(b.title));
+                    const top = hits.slice(0, topK);
+                    const lines = [`Marvis 知识库命中 ${hits.length} 条（scope=${scope}，展示前 ${top.length}）`, ''];
+                    for (const h of top) {
+                        lines.push(`[${h.score}] ${h.title}`);
+                        lines.push(`  相对路径: ${h.rel}`);
+                        lines.push(`  绝对路径: ${h.abs}`);
+                        lines.push(`  摘要: ${h.snippet}`);
+                        lines.push('');
+                    }
+                    if (!top.length) lines.push('（Marvis 知识库无命中）');
+                    ok(id, { content: [{ type: 'text', text: lines.join('\n').trim() }], isError: false });
+                    return;
+                }
+                if (name === 'dsh_route') {
+                    const task = String(a.task || '').trim();
+                    if (!task) {
+                        ok(id, { content: [{ type: 'text', text: '参数错误：task 不能为空' }], isError: true });
+                        return;
+                    }
+                    const r = routeModel(task);
+                    const lines = [
+                        `## 档位匹配结果`,
+                        ``,
+                        `| 项 | 值 |`,
+                        `|---|---|`,
+                        `| 命中档位 | **${r.tier}**${r.matched ? '' : '（兜底，无规则命中）'} |`,
+                        `| provider | \`${r.provider}\` |`,
+                        `| model | \`${r.model}\` |`,
+                        `| credits | ${r.credits === null ? '未知' : 'x' + r.credits.toFixed(2)} |`,
+                        `| 依据 | ${r.note} |`,
+                        ``,
+                        `> 规则自上而下 = 成本升序，命中即停。档位表 review-after 2026-11-08。`,
+                    ];
+                    ok(id, { content: [{ type: 'text', text: lines.join('\n') }], isError: false });
                     return;
                 }
                 if (name === 'dsh_plan') {
@@ -501,6 +797,18 @@ async function handle(req) {
                         ok(id, { content: [{ type: 'text', text: '参数错误：task 不能为空' }], isError: true });
                         return;
                     }
+                    // 档位路由：auto（默认，按规则匹配成本最低）| 显式模型 id | off（用 profile 默认）
+                    let route = null;
+                    let patchFile = null;
+                    const mode = String(a.model || 'auto');
+                    if (mode !== 'off') {
+                        route = (mode === 'auto')
+                            ? routeModel(a.task)
+                            : { provider: 'workbuddy', model: mode, tier: 'manual', credits: null, note: '调用方显式指定', matched: true };
+                        patchFile = writeModelPatch(route);
+                        log(`dsh_run route: tier=${route.tier} ${route.provider}/${route.model} (credits=${route.credits ?? '?'})`);
+                    }
+
                     log(`dsh_run start: ${a.task.slice(0, 80).replace(/\s+/g, ' ')}…`);
                     const r = await runDsh({
                         task: a.task,
@@ -508,11 +816,23 @@ async function handle(req) {
                         timeout: a.timeout_seconds,
                         sessionId: a.session_id,
                         json: a.json_events === true,
+                        patchFile,
                     });
+                    if (patchFile) { try { rmSync(dirname(patchFile), { recursive: true, force: true }); } catch { /* ignore */ } }
+
+                    const routeHead = [];
+                    if (route) {
+                        routeHead.push(
+                            `🎯 档位路由：${route.tier} | ${route.provider}/${route.model} | ` +
+                            `credits=${route.credits === null ? '?' : 'x' + route.credits.toFixed(2)}` +
+                            `${route.matched ? '' : '（兜底）'}\n   依据：${route.note}`,
+                            '',
+                        );
+                    }
                     let out = r.stdout.trim();
                     if (out.length > MAX_OUTPUT) out = out.slice(0, MAX_OUTPUT) + `\n…[输出超过 ${MAX_OUTPUT} 字符已截断]`;
 
-                    const parts = [];
+                    const parts = [...routeHead];
                     if (r.timedOut) parts.push(`⚠️ 超时被终止（超过设定秒数）。可将任务拆小，或调大 timeout_seconds。`);
                     if (!out && r.stderr.trim()) parts.push('（无 stdout）');
                     if (out) parts.push(out);
