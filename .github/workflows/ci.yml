@@ -92,14 +92,21 @@ jobs:
           }
           Write-Host "✅ initialize：$($init.serverInfo.name) v$($init.serverInfo.version)，协议 $($init.protocolVersion)"
 
-          # 2) tools/list —— 必须恰好 4 个工具
+          # 2) tools/list —— 工具清单是「金标准断言」：
+          #    新增/改名 MCP 工具时，必须同步改这里，否则 CI 会红。
+          #    这是刻意设计：工具清单是对外契约（Marvis 侧按名字调用），
+          #    不允许悄悄变化。改这里时请同步 README 的工具表。
+          $expected = @('dsh_kb_search', 'dsh_plan', 'dsh_route', 'dsh_run', 'dsh_status')
           $tools = @($responses[2].result.tools)
-          if ($tools.Count -ne 4) {
-            Write-Host "::error::期望 4 个工具，实际 $($tools.Count) 个"; exit 1
+          if ($tools.Count -ne $expected.Count) {
+            Write-Host "::error::期望 $($expected.Count) 个工具，实际 $($tools.Count) 个"
+            Write-Host "  实际工具：$(($tools | ForEach-Object { $_.name }) -join ', ')"
+            exit 1
           }
           $names = ($tools | ForEach-Object { $_.name } | Sort-Object) -join ','
-          if ($names -ne 'dsh_kb_search,dsh_plan,dsh_run,dsh_status') {
-            Write-Host "::error::工具名不符: $names"; exit 1
+          $wantNames = ($expected | Sort-Object) -join ','
+          if ($names -ne $wantNames) {
+            Write-Host "::error::工具名不符。期望: $wantNames / 实际: $names"; exit 1
           }
           foreach ($t in $tools) {
             if (-not $t.inputSchema -or $t.inputSchema.type -ne 'object') {

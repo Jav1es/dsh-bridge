@@ -160,7 +160,7 @@ Copy-Item .\mcp-server\* "$env:USERPROFILE\.marvis\mcp\dsh-bridge\" -Force
 | 用例 | 结果 |
 | :-- | :-- |
 | `initialize` 握手 | ✅ `serverInfo: dsh-bridge v1.1.0` |
-| `tools/list` | ✅ 返回 4 个工具 |
+| `tools/list` | ✅ 返回 5 个工具 |
 | `dsh_status` | ✅ `ok=true, exit_code=0, reply="可以"` |
 | `dsh_run` 简单任务 | ✅ 返回「可以」 |
 | `dsh_run` **带 workdir 的真实文件任务** | ✅ 让它统计工作区 `.mjs` 文件数 → 正确返回 `3` |
@@ -180,6 +180,7 @@ Copy-Item .\mcp-server\* "$env:USERPROFILE\.marvis\mcp\dsh-bridge\" -Force
 | :-- | :-- |
 | **`dsh_plan`** | 规划：读本机 Marvis 的**技能清单与 MCP 工具清单**，对提问做本地检索，再让 dsh 生成一份派工单（意图澄清 / 任务拆解 / **建议调用的技能与工具名** / 是否交给 dsh 深加工 / 输出要求 / 注意事项）。参数：`question`（必填）、`top_k`、`timeout_seconds`、`skip_llm`（true 时只回检索候选，秒回不耗模型） |
 | **`dsh_run`** | 把任务交给 dsh 自主执行。参数：`task`（必填）、`workdir`、`timeout_seconds`（默认 600，上限 3600）、`session_id`（多轮续跑）、`json_events` |
+| **`dsh_route`** | 档位预览：给定任务文本，返回「会选中哪个模型、为什么、成本多少」，**不执行**任务。调 `dsh_run` 前先看清会花多少钱。参数：`task`（必填） |
 | **`dsh_status`** | 自检：dsh 是否连通、退出码、实测答复、错误摘要 |
 | **`dsh_kb_search`** | 知识库互通（反向）：在 Marvis 知识库（marvis-llm-wiki）里做只读关键词检索，返回命中条目的标题 / 路径 / 摘要。零复制——DSH 直接扫 Marvis 的 `knowledge` 目录（index + wiki 页），不 ingest、不转换格式、不写任何文件。参数：`query`（必填）、`scope`（combined/personal/external，默认 combined）、`top_k`（默认 6，上限 20） |
 
@@ -258,7 +259,7 @@ CI 每次 push 会跑：文件布局检查 → Node 与 PowerShell 语法检查 
 ## 📢 诚信说明
 
 - **真实可用**：仓库内所有脚本与配置均在本机实测通过，测试结果见上文表格。
-- **未夸大**：MCP server 只暴露 4 个工具，没有把「调用 dsh」包装成任何它做不到的能力。
+- **未夸大**：MCP server 只暴露 5 个工具（`dsh_plan` / `dsh_run` / `dsh_route` / `dsh_status` / `dsh_kb_search`），没有把「调用 dsh」包装成任何它做不到的能力。
 - **有边界**：`chat.deepseek.com` 网页端等灰色用法**不在本项目范围内**——本项目只调用本机 dsh 的官方 headless 模式，走你自己的账号。
 - **不含本机信息**：仓库内无个人路径、用户名或凭据；配置模板使用 `YOUR_USERNAME` 占位符。
 
